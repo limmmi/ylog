@@ -15,7 +15,7 @@
 #include <windows.h>
 #endif
 
-using namespace ylog;
+using namespace utility;
 
 void Ylog::init(const char*file_name,int max_cnt,int buf_threshold)
 {

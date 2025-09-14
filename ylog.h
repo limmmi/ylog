@@ -22,7 +22,7 @@ Windows,Linux 跨平台
 #endif
 using namespace std;
 
-namespace ylog{
+namespace utility{
 
 class Ylog{
 public:

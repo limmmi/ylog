@@ -9,7 +9,7 @@
 
 #include "ylog.h"
 
-using namespace ylog;
+using namespace utility;
 
 int random_num(int a,int b){
     return (rand() % (b-a+1))+ a;
