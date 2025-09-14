@@ -1,4 +1,4 @@
-#include"ylog.h"
+#include"Ylog.h"
 
 #include<thread>
 #include<fstream>
@@ -8,6 +8,7 @@
 #include<condition_variable>
 #include<atomic>
 #include <ctime>
+#include<chrono>
 #include <iomanip>
 #include <sstream>
 #ifdef _WIN32
@@ -34,17 +35,44 @@ void Ylog::init(const char*file_name,int max_cnt,int buf_threshold)
     m_fp = new std::ofstream();
     m_fp->open(this->filename,ios::app);
     if (!m_fp->is_open()) {
-        this->log(Ylog::ERROR,"CAN NOT OPEN LOG FILE!");
+        this->log(Ylog::ERR,"CAN NOT OPEN LOG FILE!");
     }
-    writer_thread = thread(&Ylog::write_loop);
+    writer_thread = thread(&Ylog::write_loop,this);
 }
 
 void Ylog::setColor(Color foreground,Color background)
 {
     #ifdef _WIN32
         HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-        WORD wColor = (static_cast<WORD>(background) << 4) | static_cast<WORD>(foreground);
-        SetConsoleTextAttribute(hConsole, wColor);
+        // 映射前景色
+        WORD wForeground = 0;
+        switch (foreground) {
+            case BLACK:   wForeground = 0; break;
+            case RED:     wForeground = FOREGROUND_RED | FOREGROUND_INTENSITY; break;
+            case GREEN:   wForeground = FOREGROUND_GREEN | FOREGROUND_INTENSITY; break;
+            case YELLOW:  wForeground = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY; break;
+            case BLUE:    wForeground = FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
+            case MAGENTA: wForeground = FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
+            case CYAN:    wForeground = FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
+            case WHITE:   wForeground = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY; break;
+            case DEFAULT: 
+            default:      wForeground = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE; // 灰色
+        }
+        // 映射背景色
+        WORD wBackground = 0;
+        switch (background) {
+            case BLACK:   wBackground = 0; break;
+            case RED:     wBackground = BACKGROUND_RED; break;
+            case GREEN:   wBackground = BACKGROUND_GREEN; break;
+            case YELLOW:  wBackground = BACKGROUND_RED | BACKGROUND_GREEN; break;
+            case BLUE:    wBackground = BACKGROUND_BLUE; break;
+            case MAGENTA: wBackground = BACKGROUND_RED | BACKGROUND_BLUE; break;
+            case CYAN:    wBackground = BACKGROUND_GREEN | BACKGROUND_BLUE; break;
+            case WHITE:   wBackground = BACKGROUND_RED | BACKGROUND_GREEN | BACKGROUND_BLUE; break;
+            case DEFAULT: 
+            default:      wBackground = 0; // 黑色背景
+        }
+        SetConsoleTextAttribute(hConsole, wForeground | wBackground);
     #else
         // ANSI转义序列
         std::cout << "\033[";
@@ -69,6 +97,7 @@ void Ylog::print(string&context,Color color)
 {
     setColor(color);
     std::cout<<context;
+    setColor(Color::DEFAULT);
 }
 
 //[时间][等级][内容]
@@ -78,7 +107,7 @@ void Ylog::log(LEVEL level,const char* context)
         return;
     }
     time_t now = time(NULL);
-    struct tm local_tm; // 存储时间的独立副本
+    struct tm local_tm;
 
     // 跨平台时间转换
     #if defined(_WIN32)
@@ -94,23 +123,23 @@ void Ylog::log(LEVEL level,const char* context)
     switch (level)
     {
     case DEBUG:
-        log = "["+string(time_buffer)+"][DEBUG]["+context + "]"+"\r\n";
+        log = "["+string(time_buffer)+"][DEBUG]["+context + "]"+Ylog::get_instance()->NEWLINE;
         print(log,Ylog::Color::BLUE);
         break;
     case INFO:
-        log = "["+string(time_buffer)+"][INFO ]["+context + "]"+"\r\n";
+        log = "["+string(time_buffer)+"][INFO ]["+context + "]"+Ylog::get_instance()->NEWLINE;
         print(log,Ylog::Color::GREEN);
         break;
     case WARNING:
-        log = "["+string(time_buffer)+"][WARN ]["+context + "]"+"\r\n";
+        log = "["+string(time_buffer)+"][WARN ]["+context + "]"+Ylog::get_instance()->NEWLINE;
         print(log,Ylog::Color::YELLOW);
         break;
-    case ERROR:
-        log = "["+string(time_buffer)+"][ERROR]["+context + "]"+"\r\n";
+    case ERR:
+        log = "["+string(time_buffer)+"][ERROR]["+context + "]"+Ylog::get_instance()->NEWLINE;
         print(log,Ylog::Color::RED);
         break;
     case FATAL:
-        log = "["+string(time_buffer)+"][FATAL]["+context + "]"+"\r\n";
+        log = "["+string(time_buffer)+"][FATAL]["+context + "]"+Ylog::get_instance()->NEWLINE;
         print(log,Ylog::Color::MAGENTA);
         break;
     default:
@@ -132,7 +161,7 @@ void Ylog::log(LEVEL level,const char* context)
         log_num++;
         m_fp->open(to_string(log_num)+"_"+filename,ios::app);
         if (!m_fp->is_open()) {
-            log = "["+string(time_buffer)+"][ERROR]["+"CAN NOT OPEN LOG FILE" + "]"+"\r\n";
+            log = "["+string(time_buffer)+"][ERROR]["+"CAN NOT OPEN LOG FILE" + "]"+Ylog::get_instance()->NEWLINE;
             print(log,Ylog::Color::RED);
         }
         line_cnt=0;
@@ -140,18 +169,21 @@ void Ylog::log(LEVEL level,const char* context)
 }
 
 // 写入线程函数
-void Ylog::write_loop(){
-    auto* inst = Ylog::get_instance();   
-    while(inst->running&&inst->m_fp->is_open()){
+void Ylog::write_loop(){  
+    while(running&&m_fp&&m_fp->is_open()){
         std::queue<std::string>temp_queue;    
         {
-            std::unique_lock<std::mutex>buf_lck(inst->buffer_mutex);
-            inst->buffer_cond.wait(buf_lck,
-                [inst](){
-                return inst->write_action.load() || !inst->running;
+            std::unique_lock<std::mutex>buf_lck(buffer_mutex);
+            // buffer_cond.wait(buf_lck,
+            //     [this](){
+            //     return write_action || !running;
+            // });
+            buffer_cond.wait_for(buf_lck,100ms,
+                [this](){
+                return write_action || !running;
             });
-            std::swap(temp_queue, inst->log_buffer);
-            inst->write_action=false;
+            std::swap(temp_queue, log_buffer);
+            write_action=false;
         }
         // 批量写入
         std::string combined;
@@ -159,8 +191,8 @@ void Ylog::write_loop(){
             combined+=temp_queue.front();
             temp_queue.pop();
         }
-        *inst->m_fp <<combined;
-        inst->m_fp->flush();
+        *m_fp <<combined;
+        m_fp->flush();
     }
 }
 
@@ -168,10 +200,10 @@ Ylog::Ylog(){
 
 }
 
-Ylog::~Ylog() {
-    running = false;
+void Ylog::stop(){
     {
         std::lock_guard<std::mutex> lock(buffer_mutex);
+        running = false;
         buffer_cond.notify_one();
     }
     if (writer_thread.joinable()) {
@@ -180,4 +212,8 @@ Ylog::~Ylog() {
     if (m_fp) {
         m_fp->close();
     }
+}
+
+Ylog::~Ylog() {
+    stop();
 }

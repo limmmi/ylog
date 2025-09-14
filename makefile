@@ -11,6 +11,8 @@ else
     LOG_FILES = *.log
 endif
 
+# windows build:  g++ -o build.exe main.cpp ylog.cpp -pthread
+
 # 主构建规则
 $(EXECUTABLE): main.cpp ylog.cpp
 	g++ -o $@ $^ -pthread -std=c++11

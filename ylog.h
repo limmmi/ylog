@@ -8,6 +8,8 @@ Windows,Linux 跨平台
 [时间][等级][内容]
 控制台根据等级用不同的颜色打印
 */
+#pragma once
+
 #include<iostream>
 #include<string>
 #include<queue>
@@ -28,7 +30,7 @@ public:
         DEBUG,
         INFO,
         WARNING,
-        ERROR,
+        ERR,
         FATAL
     };
 private:
@@ -75,12 +77,21 @@ private:
     std::thread writer_thread;                // 写入线程
     std::atomic<bool> running;                // 控制线程运行的标志
 
-    static void write_loop();                 // 写入文件的线程
+    void stop();                              // 停止log线程
+
+    void write_loop();                        // 写入文件的线程
     static void setColor(Color foreground,
             Color background = DEFAULT);      // 设置文本颜色
     
     static void print(string&context,
             Color color);                     // 打印到控制台
+
+private:
+    #ifdef _WIN32
+        static constexpr const char* NEWLINE = "\n";
+    #else
+        static constexpr const char* NEWLINE = "\n";
+    #endif
 
 };
 }// end namespace
