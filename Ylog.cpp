@@ -103,9 +103,6 @@ void Ylog::print(string&context,Color color)
 //[时间][等级][内容]
 void Ylog::log(LEVEL level,const char* context)
 {
-    if(running==false){
-        return;
-    }
     time_t now = time(NULL);
     struct tm local_tm;
 
@@ -120,6 +117,9 @@ void Ylog::log(LEVEL level,const char* context)
     strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", &local_tm);
     string log;
     std::lock_guard<std::mutex> locker(buffer_mutex); // 保护控制台,避免多线程同时输出
+    if(running==false){
+        return;
+    }
     switch (level)
     {
     case DEBUG:

@@ -1,7 +1,9 @@
 /*
-    Ylog 测试程序,异步多线程测试,确保线程安全
-    跨平台测试(Linux,Windows)
+异步日志
+c++ 17
+Windows, Linux
 */
+
 
 #include<iostream>
 #include<thread>

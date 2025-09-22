@@ -1,12 +1,8 @@
 
-/*c++ 17*/
 /*
-异步日志 
-Windows,Linux 跨平台
-多线程执行,保证线程安全
-线程安全的缓冲区阻塞队列
-[时间][等级][内容]
-控制台根据等级用不同的颜色打印
+异步日志
+c++ 17
+Windows, Linux
 */
 #pragma once
 
@@ -54,7 +50,7 @@ public:
     } 
 
     // 不需要后缀名,已经默认为.log
-    void init(const char*file_name,int max_cnt=10000,int buf_threshold=10);
+    void init(const char*file_name,int max_cnt=10000,int buf_threshold=100);
 
     // 写入缓冲区和控制台
     void log(LEVEL level,const char* context);
